@@ -1,6 +1,8 @@
 # Sistema de Registro Universitario
 
 > **Práctica I** — Asignatura ST0244 Lenguajes de Programación · Universidad EAFIT
+>
+> **Integrantes:** Juan David Giraldo Regino · Juan José Duque Marín
 
 Sistema para gestionar el **ingreso y salida de estudiantes del campus**, implementado en dos paradigmas distintos: **funcional (Haskell)** y **lógico (Prolog)**.
 
@@ -92,44 +94,53 @@ Estudiante {idEst = "87654321", entrada = 555, salida = 740}
 
 | # | Predicado | Descripción |
 |---|---|---|
-| 1 | `registrar_entrada/0` | Check In: solicita ID y hora de entrada, persiste con `assertz` |
-| 2 | `buscar_estudiante/0` | Busca por ID si el estudiante está actualmente dentro (`salida = 0`) |
+| 1 | `registrar_entrada/0` | Valida que el ID sea entero y que no esté ya dentro, pide hora en `HH:MM` y persiste con `assertz` |
+| 2 | `buscar_estudiante/0` | Si está dentro muestra hora de entrada; si ya salió muestra entrada, salida y duración |
 | 3 | `calcular_tiempo/3` | Calcula la permanencia como `Salida - Entrada` en minutos |
-| 4 | `listar_estudiantes/0` | Lista todos los registros en memoria con ID, entrada y salida |
-| 5 | `registrar_salida/0` | Check Out: retracta el hecho anterior y aserta uno nuevo con hora de salida |
+| 4 | `listar_estudiantes/0` | Recarga `University.txt` desde disco (`cargar_datos`) y muestra todos los registros |
+| 5 | `registrar_salida/0` | Valida que la hora de salida sea posterior a la entrada, actualiza con `retract` + `assertz` |
 
 ### Análisis Técnico
 
 **1. Base de Conocimiento Dinámica**
 
-Los estudiantes se representan como hechos dinámicos:
+Los estudiantes se representan como hechos dinámicos. Un valor de `0` en el tercer argumento indica que el estudiante sigue dentro:
 
 ```prolog
-:- dynamic estudiante/3. % estudiante(Id, Entrada, Salida)
+:- dynamic estudiante/3. % estudiante(Id, Entrada, Salida) — 0 si aún está dentro
 ```
 
-Un valor de `0` en `Salida` indica que el estudiante sigue dentro. Prolog permite agregar y retirar hechos en tiempo de ejecución con `assertz/1` y `retract/1`.
+**2. Gestión del Tiempo (Opción 2 — consistente con Haskell)**
 
-**2. Persistencia**
-
-El sistema carga datos desde `University.txt` al iniciar usando `cargar_datos/0`, que lee los términos con `read/2` y los incorpora a la base de conocimiento. Al registrar entradas o salidas, `guardar_datos/0` reescribe el archivo con `format/3`.
+Igual que en Haskell, la hora se ingresa en formato `HH:MM` entre comillas simples y se almacena como minutos desde `00:00`. `parsear_hora/2` y `minutos_a_hora/2` hacen la conversión:
 
 ```prolog
-estudiante(123, 480, 0).
-estudiante(456, 510, 620).
+parsear_hora('08:30', 510).   % H*60 + M
+minutos_a_hora(510, '08:30').
 ```
 
-**3. Menú con `repeat/0`**
+**3. Opción 4 — Recarga desde archivo**
 
-A diferencia de Haskell, el menú usa el predicado `repeat/0` combinado con un corte (`!`) al seleccionar la opción de salida, simulando un ciclo imperativo dentro del paradigma lógico.
+`listar_estudiantes/0` llama a `cargar_datos` antes de mostrar, recargando `University.txt` en ese momento — cumple el mismo requerimiento que en Haskell: *load → store → display*.
 
-**4. Gestión de Tiempo**
+**4. Persistencia**
 
-Los tiempos se almacenan en minutos desde `00:00` y la permanencia se calcula con una resta simple.
+Al arrancar, `menu/0` llama `cargar_datos/0` que limpia la base con `retractall` y repobla desde el archivo. En cada Check In o Check Out, `guardar_datos/0` reescribe el archivo con `format/3`.
+
+**5. Menú con Recursividad (`menu_loop`)**
+
+En lugar del `repeat/0` con corte, el menú usa un predicado recursivo `menu_loop/0`. Al finalizar cada operación, el predicado `ejecutar/1` llama a `menu_loop` nuevamente, excepto en la opción 5:
 
 ```prolog
-calcular_tiempo(E, S, T) :- T is S - E.
+ejecutar(1) :- registrar_entrada, menu_loop.
+ejecutar(5) :- writeln('Saliendo del sistema. Hasta luego.').
+ejecutar(_) :- writeln('Opcion no valida.'), menu_loop.
 ```
+
+**6. Validaciones**
+
+- Check In: verifica que el ID sea entero y que no haya un registro activo (`salida = 0`) para ese ID.
+- Check Out: si el formato de hora es inválido o la salida es anterior a la entrada, restaura el hecho original con `assertz` y muestra el error.
 
 ### Instrucciones de Ejecución
 
@@ -145,14 +156,14 @@ swipl registro.pl
 El sistema arranca automáticamente gracias a la directiva:
 
 ```prolog
-:- initialization(menu).
+:- initialization(menu, main).
 ```
 
 ### Formato de Almacenamiento
 
 ```prolog
-estudiante(123, 480, 0).
-estudiante(456, 510, 620).
+estudiante(1001, 510, 0).
+estudiante(1002, 480, 740).
 ```
 
 > Un valor de `0` en el tercer argumento indica que el estudiante aún permanece en la universidad.

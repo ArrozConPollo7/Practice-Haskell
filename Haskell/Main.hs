@@ -1,4 +1,5 @@
 import System.IO
+import System.Directory (doesFileExist)
 import Data.List
 import Control.Exception
 import Data.Char (isDigit)
@@ -30,7 +31,7 @@ pedirHora prompt = do
         Just mins -> return mins
         Nothing   -> putStrLn "  Formato invalido. Use HH:MM (ej: 08:30)" >> pedirHora prompt
 
--- 1) Check In: Registrar entrada [cite: 13, 14]
+-- 1) Check In: Registrar entrada
 registrarEntrada :: String -> Int -> [Estudiante] -> [Estudiante]
 registrarEntrada id hEntrada lista = Estudiante id hEntrada (-1) : lista
 
@@ -81,23 +82,28 @@ listarEstudiantes lista = do
                    ++ "  | " ++ est
     padR n s = take n (s ++ repeat ' ')
 
--- 5) Check Out: Registrar salida [cite: 29, 30, 35]
+-- 5) Check Out: Registrar salida
 registrarSalida :: String -> Int -> [Estudiante] -> [Estudiante]
 registrarSalida id hSalida lista = 
     map (\e -> if idEst e == id && salida e == -1 then e { salida = hSalida } else e) lista
 
--- Persistencia: Guardar en archivo [cite: 44]
+-- Persistencia: Guardar en archivo
 guardarArchivo :: [Estudiante] -> IO ()
 guardarArchivo lista = writeFile archivoDatos (unlines (map show lista))
 
--- Persistencia: Cargar desde archivo [cite: 43]
+-- Persistencia: Cargar desde archivo (lo crea vacío si no existe)
 cargarArchivo :: IO [Estudiante]
 cargarArchivo = do
-    -- El catch evita que el programa falle si el archivo no existe [cite: 60]
-    contenido <- readFile archivoDatos `catch` (\e -> let _ = (e :: IOError) in return "")
-    if length contenido >= 0 
-        then return (map read (lines contenido))
-        else return []
+    existe <- doesFileExist archivoDatos
+    if not existe
+        then do
+            writeFile archivoDatos ""
+            putStrLn "  [INFO] University.txt no encontrado. Se creo uno nuevo."
+            return []
+        else do
+            contenido <- readFile archivoDatos `catch` (\e -> let _ = (e :: IOError) in return "")
+            let lineas = filter (not . null) (lines contenido)
+            return (map read lineas)
 
 -- 3) Time Calculation: mostrar tiempo de un estudiante
 calcularTiempo :: String -> [Estudiante] -> IO ()

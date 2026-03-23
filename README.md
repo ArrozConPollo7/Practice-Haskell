@@ -23,61 +23,63 @@ Sistema para gestionar el **ingreso y salida de estudiantes del campus**, implem
 
 | # | Función | Descripción |
 |---|---|---|
-| 1 | **Check In** | Registra la entrada del estudiante con su ID y hora en formato `HH:MM` |
-| 2 | **Search by Student ID** | Muestra ficha detallada del estudiante si está actualmente en campus |
-| 3 | **Time Calculation** | Calcula y muestra el tiempo de permanencia de un estudiante ya egresado |
-| 4 | **List Students** | Lista todos los registros en memoria con tabla de ID, entrada, salida y estado |
-| 5 | **Check Out** | Registra la salida, calcula la duración y actualiza el archivo |
+| 1 | **Check In** | Verifica que el estudiante no esté ya dentro, registra ID y hora de entrada en formato `HH:MM` |
+| 2 | **Search by Student ID** | Muestra ficha del estudiante si está actualmente en campus (`salida = -1`) |
+| 3 | **Time Calculation** | Calcula y muestra el tiempo de permanencia de un estudiante que ya realizó Check Out |
+| 4 | **List Students** | Recarga `University.txt` desde disco en el momento de elegir la opción, almacena en lista y la muestra |
+| 5 | **Check Out** | Registra la hora de salida, calcula la duración y guarda en archivo |
 
 ### Análisis Técnico
 
 **1. Modelo de Datos e Inmutabilidad**
 
-Los estudiantes se representan con una estructura `Estudiante` definida con `data`. Para "actualizar" un registro (como en el Check Out), el programa usa `map` para recorrer la lista y generar una **nueva lista** con el dato modificado, sin alterar los datos originales — principio central del paradigma funcional.
+Los estudiantes se representan con una estructura `Estudiante` definida con `data`. Ninguna función modifica la lista existente — cada operación genera una nueva lista que se pasa como argumento a la siguiente llamada recursiva del menú.
 
-**2. Gestión de Tiempo con Validación**
+**2. Gestión del Tiempo (Opción 2)**
 
-La hora se ingresa en formato `HH:MM` y se convierte a minutos totales desde `00:00` mediante `parsearHora`. La función `pedirHora` valida la entrada y repite la solicitud si el formato es incorrecto.
+La hora se ingresa en formato `HH:MM`, validada por `parsearHora`, y se almacena internamente como minutos desde `00:00`. La permanencia se calcula con una resta simple:
 
 ```
 08:30  →  510 minutos
 Permanencia = TiempoSalida - TiempoEntrada
 ```
 
-**3. Persistencia y Lazy Evaluation**
+**3. Opción 4 — Carga desde archivo en tiempo real**
 
-El archivo `University.txt` se carga **una sola vez** al iniciar `main`, y la lista resultante se pasa como argumento al menú en cada iteración. Esto evita lecturas repetidas y los conflictos de acceso propios de la evaluación perezosa de Haskell. Las escrituras se realizan con `writeFile` tras cada operación de Check In o Check Out.
+`studentsList` llama a `cargarArchivo` en el momento en que el usuario elige esta opción, cumpliendo el requerimiento de la guía: *load → store in list → display*. La lista retornada reemplaza la que estaba en memoria.
 
-**4. Menú con Recursividad Paramétrica**
+**4. Persistencia**
 
-El menú recibe la lista actual como argumento (`menu :: [Estudiante] -> IO ()`) y se llama recursivamente con la lista actualizada tras cada operación. Esto reemplaza el estado mutable: el "estado" del programa vive en el argumento de la función.
+`University.txt` se carga al iniciar `main`. En cada Check In o Check Out, `guardarArchivo` reescribe el archivo completo con el estado actualizado. Si el archivo no existe al arrancar, se crea automáticamente vacío.
 
-**5. Salida Formateada**
+**5. Menú con Recursividad Paramétrica**
 
-Los registros se muestran en tabla con columnas alineadas. La función auxiliar `minutosAHora` reconvierte los minutos almacenados al formato `HH:MM` para la visualización.
+El menú recibe la lista actual como argumento (`menu :: [Estudiante] -> IO ()`) y se llama recursivamente con la lista actualizada. El "estado" del programa vive en el parámetro, sin variables mutables.
 
-```
-  ID       | Entrada | Salida  | Estado
-  ---------+---------+---------+----------
-  12345678 | 08:30   | 17:00   | SALIO
-  87654321 | 09:15   |   --    | EN CAMPUS
+```haskell
+"1" -> checkIn lista      >>= menu
+"4" -> studentsList       >>= menu   -- recarga desde disco
+"5" -> checkOut lista     >>= menu
 ```
 
 ### Instrucciones de Ejecución
 
 **Requisitos:** [GHC — Glasgow Haskell Compiler](https://www.haskell.org/ghc/)
 
-1. Coloque `Main.hs` y `University.txt` en la misma carpeta.
+1. Coloque `Main.hs` en su carpeta de trabajo.
 2. Abra una terminal en esa carpeta y ejecute:
 
 ```bash
 runhaskell Main.hs
 ```
 
+> Si `University.txt` no existe, el programa lo crea automáticamente al iniciar.
+
 ### Formato de Almacenamiento
 
 ```haskell
 Estudiante {idEst = "12345678", entrada = 510, salida = -1}
+Estudiante {idEst = "87654321", entrada = 555, salida = 740}
 ```
 
 > Un valor de `-1` en `salida` indica que el estudiante aún permanece en la universidad.
